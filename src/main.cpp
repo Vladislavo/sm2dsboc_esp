@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <SD.h>
 
 #include "bus_protocol/bus_protocol.h"
 
@@ -52,8 +53,10 @@ sensors_data_t sensors_data;
 void setup() {
     Serial.begin(BAUDRATE);
     bus_wis.begin(BAUDRATE, SERIAL_8N1, WIS_RX_PIN, WIS_TX_PIN);
-    // bus_wis.begin(9600, SERIAL_8N1, MKR_RX_PIN, MKR_TX_PIN);
+    // bus_mkr.begin(9600, SERIAL_8N1, MKR_RX_PIN, MKR_TX_PIN);
   
+    SD.begin();
+    
     dht.begin();
 
     xTaskCreate(sensors_task,     /* Task function. */
@@ -167,6 +170,16 @@ void sd_add_record(const sensors_data_t *sensors_data) {
     Serial.printf("writen sd: board_id = %d, utc = %u, sm_0 = %u, sm_1 = %u, t = %0.2f, h = %0.2f\r\n",
                     sensors_data->board_id, sensors_data->utc, sensors_data->soil_moisture_0, 
                     sensors_data->soil_moisture_1, sensors_data->dht_temp, sensors_data->dht_hum);
+    File fp = SD.open("/sensor_data.csv", FILE_APPEND);
+    
+    if (fp) {
+        fp.printf("%d, %u, %u, %u, %0.2f, %0.2f\r\n", 
+                    sensors_data->board_id, sensors_data->utc, sensors_data->soil_moisture_0, 
+                    sensors_data->soil_moisture_1, sensors_data->dht_temp, sensors_data->dht_hum);
+        fp.close();
+
+        Serial.println(F("SD written"));
+    }
 }
 
 uint8_t bus_protocol_serial_receive(Stream *serial, uint8_t *data, uint8_t *data_length) {
