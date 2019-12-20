@@ -3,11 +3,15 @@
 
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef enum {
     BUS_PROTOCOL_BOARD_ID_WIS = 0,    // whisper node
     BUS_PROTOCOL_BOARD_ID_MKR,        // mkr1000
     BUS_PROTOCOL_BOARD_ID_ESP,        // esp32
-    BUS_PROTOCOL_BOARD_ID_UNKNOWN
+    BUS_PROTOCOL_BOARD_ID_UNKNOWN = 0xFF
 } board_id_t;
 
 typedef enum {
@@ -18,10 +22,6 @@ typedef enum {
     BUS_PROTOCOL_PACKET_TYPE_NACK = 0x31,
     BUS_PROTOCOL_PACKET_TYPE_UNKNOWN = 0xFF
 } packet_type_t;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 void bus_protocol_packet_encode(
     const packet_type_t packet_type,

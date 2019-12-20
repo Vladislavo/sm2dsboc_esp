@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "bus_protocol.h": "c",
+        "string.h": "c"
+    }
+}

@@ -1,4 +1,4 @@
-#include "bus_protocol.h"
+#include "bus_protocol/bus_protocol.h"
 #include <stdint.h>
 #include <string.h>
 
@@ -17,6 +17,9 @@ void bus_protocol_packet_encode(
     *packet_length = 0;
     
     packet[*packet_length] = START_FRAME_BYTE;
+    (*packet_length)++;
+
+    packet[*packet_length] = packet_type;
     (*packet_length)++;
     
     memcpy(&packet[*packet_length], data, data_length);
@@ -126,6 +129,9 @@ void bus_protocol_data_send_encode(
     memcpy(&packet[*packet_length], &soil_moisture_0, sizeof(soil_moisture_0));
     (*packet_length) += sizeof(soil_moisture_0);
 
+    memcpy(&packet[*packet_length], &soil_moisture_1, sizeof(soil_moisture_1));
+    (*packet_length) += sizeof(soil_moisture_1);
+
     memcpy(&packet[*packet_length], &dht_temp, sizeof(dht_temp));
     (*packet_length) += sizeof(dht_temp);
 
@@ -148,25 +154,23 @@ uint8_t bus_protocol_data_send_decode(
 {
     uint8_t p_len = 0;
 
-    if (packet[0] == START_FRAME_BYTE && packet[packet_length-1] == END_FRAME_BYTE) {
-        memcpy(board_id, &packet[p_len], sizeof(*board_id));
-        p_len++;
+    *board_id = packet[p_len];
+    p_len++;
 
-        memcpy(utc, &packet[p_len], sizeof(*utc));
-        p_len += sizeof(*utc);
+    memcpy(utc, &packet[p_len], sizeof(*utc));
+    p_len += sizeof(*utc);
 
-        memcpy(soil_moisture_0, &packet[p_len], sizeof(*soil_moisture_0));
-        p_len += sizeof(*soil_moisture_0);
+    memcpy(soil_moisture_0, &packet[p_len], sizeof(*soil_moisture_0));
+    p_len += sizeof(*soil_moisture_0);
 
-        memcpy(soil_moisture_1, &packet[p_len], sizeof(*soil_moisture_1));
-        p_len += sizeof(*soil_moisture_1);
+    memcpy(soil_moisture_1, &packet[p_len], sizeof(*soil_moisture_1));
+    p_len += sizeof(*soil_moisture_1);
 
-        memcpy(dht_temp, &packet[p_len], sizeof(*dht_temp));
-        p_len += sizeof(*dht_temp);
+    memcpy(dht_temp, &packet[p_len], sizeof(*dht_temp));
+    p_len += sizeof(*dht_temp);
 
-        memcpy(dht_hum, &packet[p_len], sizeof(*dht_hum));
-        p_len += sizeof(*dht_hum);
-    }
+    memcpy(dht_hum, &packet[p_len], sizeof(*dht_hum));
+    p_len += sizeof(*dht_hum);
 
     return p_len == packet_length;
 }
