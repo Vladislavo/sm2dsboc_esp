@@ -46,6 +46,7 @@ uint8_t bus_protocol_serial_receive(Stream *serial, uint8_t *data, uint8_t *data
 
 void sleep_mcu(const uint32_t ms);
 
+SemaphoreHandle_t xBinarySemaphore;
 
 DHT dht(DHT11_PIN, DHT11);
 
@@ -57,6 +58,8 @@ void setup() {
     SD.begin();
     
     dht.begin();
+
+    xBinarySemaphore = xSemaphoreCreateBinary();
 
     xTaskCreate(sensors_task,     /* Task function. */
                 "sensors_task",   /* String with name of task. */
@@ -92,10 +95,16 @@ void sensors_task (void *parameter) {
     while (1) {
         // read data
         read_sensors_data(&sensors_data);
-        // write new sd record 
-        sd_add_record(&sensors_data);
 
-        delay(DATA_SEND_PERIOD);
+        // write new sd record 
+        if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
+            sd_add_record(&sensors_data);
+
+            xSemaphoreGive(xBinarySemaphore);
+        }
+        
+
+        sleep_mcu(DATA_SEND_PERIOD);
     }
 }
  
@@ -141,9 +150,12 @@ void bus_task_wis (void *parameter) {
                         bus_protocol_packet_encode(BUS_PROTOCOL_PACKET_TYPE_ACK, buffer, 0, buffer, &buffer_length);
                         bus_wis.write(buffer, buffer_length);
 
-                        // write sd
-                        // TODO: protect with semaphore
-                        sd_add_record(&sensors_data);
+                        // write new sd record 
+                        if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
+                            sd_add_record(&sensors_data);
+
+                            xSemaphoreGive(xBinarySemaphore);
+                        }
                     }
 
                     bus_state = BUS_STATE_ON_IDLE;
@@ -197,9 +209,12 @@ void bus_task_mkr (void *parameter) {
                         bus_protocol_packet_encode(BUS_PROTOCOL_PACKET_TYPE_ACK, buffer, 0, buffer, &buffer_length);
                         bus_mkr.write(buffer, buffer_length);
 
-                        // write sd
-                        // TODO: protect with semaphore
-                        sd_add_record(&sensors_data);
+                        // write new sd record 
+                        if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
+                            sd_add_record(&sensors_data);
+
+                            xSemaphoreGive(xBinarySemaphore);
+                        }
                     }
 
                     bus_state = BUS_STATE_ON_IDLE;
