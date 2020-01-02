@@ -24,6 +24,8 @@
 
 #define WIS_TX_PIN                          17
 #define WIS_RX_PIN                          16
+#define MKR_TX_PIN                          26
+#define MKR_RX_PIN                          27
 
 #define DATA_SEND_PERIOD                    1000
 
@@ -66,7 +68,7 @@ void setup() {
     uint8_t error = 0;
     Serial.begin(BAUDRATE);
     bus_wis.begin(BAUDRATE, SERIAL_8N1, WIS_RX_PIN, WIS_TX_PIN);
-    // bus_mkr.begin(9600, SERIAL_8N1, MKR_RX_PIN, MKR_TX_PIN);
+    bus_mkr.begin(BAUDRATE, SERIAL_8N1, MKR_RX_PIN, MKR_TX_PIN);
 
     SD.begin();
     
@@ -99,7 +101,9 @@ void setup() {
     Serial.println("IP address set: ");
     Serial.println(WiFi.localIP()); //print LAN IP
 
-    xBinarySemaphore = xSemaphoreCreateBinary();
+    timeClient.begin();
+
+    xBinarySemaphore = xSemaphoreCreateMutex();
 
     xTaskCreate(sensors_task,     /* Task function. */
                 "sensors_task",   /* String with name of task. */
@@ -123,12 +127,14 @@ void setup() {
                 NULL);            /* Task handle. */ 
 
     delay(1000);
-
-    
 }
 
 void loop() {
+    // timeClient.update();
 
+    // Serial.println(timeClient.getFormattedTime());
+
+    // delay(1000);
 }
 
 void sensors_task (void *parameter) {
@@ -138,14 +144,13 @@ void sensors_task (void *parameter) {
         // read data
         read_sensors_data(&sensors_data);
 
-        // write new sd record 
+        // write new sd record
         if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
             sd_add_record(&sensors_data);
 
-            xSemaphoreGive(xBinarySemaphore);
+           xSemaphoreGive(xBinarySemaphore);
         }
         
-
         sleep_mcu(DATA_SEND_PERIOD);
     }
 }
@@ -206,6 +211,7 @@ void bus_task_wis (void *parameter) {
                     break;
             }
         }
+        sleep(DATA_SEND_PERIOD);
     }
 }
 
@@ -265,6 +271,7 @@ void bus_task_mkr (void *parameter) {
                     break;
             }
         }
+        sleep(DATA_SEND_PERIOD);
     }
 }
 
