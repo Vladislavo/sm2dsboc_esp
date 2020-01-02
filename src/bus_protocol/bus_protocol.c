@@ -174,3 +174,72 @@ uint8_t bus_protocol_data_send_decode(
 
     return p_len == packet_length;
 }
+
+void bus_protocol_request_time_encode(
+    const board_id_t board_id,
+    uint8_t *packet,
+    uint8_t *packet_length) 
+{
+    *packet_length = 0;
+
+    packet[*packet_length] = START_FRAME_BYTE;
+    (*packet_length)++;
+
+    packet[*packet_length] = BUS_PROTOCOL_PACKET_TYPE_REQUEST_TIME;
+    (*packet_length)++;
+
+    packet[*packet_length] = board_id;
+    (*packet_length)++;
+
+    packet[*packet_length] = END_FRAME_BYTE;
+    (*packet_length)++;
+}
+
+board_id_t bus_protocol_request_time_decode(
+    const uint8_t *packet,
+    const uint8_t packet_length) 
+{
+    return packet_length == 1 && packet[0] < BUS_PROTOCOL_BOARD_ID_UNKNOWN? 
+            packet[0] : BUS_PROTOCOL_BOARD_ID_UNKNOWN;
+}
+
+void bus_protocol_network_time_encode(
+    const board_id_t board_id,
+    const uint32_t utc,
+    uint8_t *packet,
+    uint8_t *packet_length) 
+{
+    *packet_length = 0;
+
+    packet[*packet_length] = START_FRAME_BYTE;
+    (*packet_length)++;
+
+    packet[*packet_length] = BUS_PROTOCOL_PACKET_TYPE_NETWORK_TIME;
+    (*packet_length)++;
+
+    packet[*packet_length] = board_id;
+    (*packet_length)++;
+
+    memcpy(&packet[*packet_length], &utc, sizeof(utc));
+    (*packet_length) += sizeof(utc);
+
+    packet[*packet_length] = END_FRAME_BYTE;
+    (*packet_length)++;
+}
+
+uint8_t bus_protocol_network_time_decode(
+    board_id_t *board_id,
+    uint32_t *utc,
+    const uint8_t *packet,
+    const uint8_t *packet_length) 
+{
+    uint8_t p_len = 0;
+
+    *board_id = packet[p_len];
+    p_len++;
+
+    memcpy(utc, &packet[p_len], sizeof(*utc));
+    p_len += sizeof(*utc);
+
+    return p_len == packet_length;
+}

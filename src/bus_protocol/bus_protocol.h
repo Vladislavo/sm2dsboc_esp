@@ -18,6 +18,8 @@ typedef enum {
     BUS_PROTOCOL_PACKET_TYPE_TRANSMIT_REQUEST = 0x11,
     BUS_PROTOCOL_PACKET_TYPE_TRANSMIT_GRANT = 0x12,
     BUS_PROTOCOL_PACKET_TYPE_DATA_SEND = 0x2,
+    BUS_PROTOCOL_PACKET_TYPE_REQUEST_TIME = 0x21,
+    BUS_PROTOCOL_PACKET_TYPE_NETWORK_TIME = 0x22,
     BUS_PROTOCOL_PACKET_TYPE_ACK = 0x30,
     BUS_PROTOCOL_PACKET_TYPE_NACK = 0x31,
     BUS_PROTOCOL_PACKET_TYPE_UNKNOWN = 0xFF
@@ -73,6 +75,28 @@ uint8_t bus_protocol_data_send_decode(
     float *dht_hum,
     const uint8_t *packet,
     const uint8_t packet_length);
+
+
+void bus_protocol_request_time_encode(
+    const board_id_t board_id,
+    uint8_t *packet,
+    uint8_t *packet_length);
+
+board_id_t bus_protocol_request_time_decode(
+    const uint8_t *packet,
+    const uint8_t packet_length);
+
+void bus_protocol_network_time_encode(
+    const board_id_t board_id,
+    const uint32_t utc,
+    uint8_t *packet,
+    uint8_t *packet_length);
+
+uint8_t bus_protocol_network_time_decode(
+    board_id_t *board_id,
+    uint32_t *utc,
+    const uint8_t *packet,
+    const uint8_t *packet_length);
 
 #ifdef __cplusplus
 }
