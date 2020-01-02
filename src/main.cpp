@@ -5,6 +5,15 @@
 
 #include <DHT.h>
 
+#include <WiFi.h>
+#include <NTPClient.h>
+#include <WiFiUdp.h>
+#include "esp_wpa2.h"
+
+#define WIFI_SSID                           "eduroam"
+#define EAP_IDENTITY                        "al373630@uji.es"
+#define EAP_PASSWORD                        "estudianterykov"
+
 #define BUS_PROTOCOL_MAX_DATA_SIZE          32
 #define BUS_PROTOCOL_MAX_WAITING_TIME       300
 
@@ -50,14 +59,45 @@ SemaphoreHandle_t xBinarySemaphore;
 
 DHT dht(DHT11_PIN, DHT11);
 
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP);
+
 void setup() {
+    uint8_t error = 0;
     Serial.begin(BAUDRATE);
     bus_wis.begin(BAUDRATE, SERIAL_8N1, WIS_RX_PIN, WIS_TX_PIN);
     // bus_mkr.begin(9600, SERIAL_8N1, MKR_RX_PIN, MKR_TX_PIN);
-  
+
     SD.begin();
     
     dht.begin();
+
+    WiFi.disconnect(true);  //disconnect from wifi to set new wifi connection
+    WiFi.mode(WIFI_STA);
+    error += esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+    error += esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+    //error += esp_wifi_sta_wpa2_ent_set_new_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));  //First time running, i think i needed to set this, although i received an error from the server, claiming the password was not set?
+    error += esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD)); //Following times, it ran fine with just this line (connects very fast).
+    if (error != 0) {
+        Serial.println("Error setting WPA properties.");
+    }
+    WiFi.enableSTA(true);
+
+    esp_wpa2_config_t config = WPA2_CONFIG_INIT_DEFAULT();
+    if (esp_wifi_sta_wpa2_ent_enable(&config) != ESP_OK) {
+        Serial.println("WPA2 Settings Not OK");
+    }
+
+    WiFi.begin(WIFI_SSID); //connect to Eduroam function
+    WiFi.setHostname("ESP32_Sen_Hum"); //set Hostname for your device - not neccesary
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(".");
+    }
+    Serial.println("");
+    Serial.println("WiFi connected");
+    Serial.println("IP address set: ");
+    Serial.println(WiFi.localIP()); //print LAN IP
 
     xBinarySemaphore = xSemaphoreCreateBinary();
 
@@ -83,6 +123,8 @@ void setup() {
                 NULL);            /* Task handle. */ 
 
     delay(1000);
+
+    
 }
 
 void loop() {

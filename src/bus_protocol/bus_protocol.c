@@ -241,5 +241,5 @@ uint8_t bus_protocol_network_time_decode(
     memcpy(utc, &packet[p_len], sizeof(*utc));
     p_len += sizeof(*utc);
 
-    return p_len == packet_length;
+    return p_len == *packet_length;
 }
