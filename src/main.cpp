@@ -16,7 +16,7 @@
 #define WIS_TX_PIN                          17
 #define WIS_RX_PIN                          16
 
-#define DATA_SEND_PERIOD                    60000
+#define DATA_SEND_PERIOD                    1000
 
 HardwareSerial bus_wis(2);
 HardwareSerial bus_mkr(1);
@@ -36,7 +36,8 @@ typedef enum {
 } bus_state_t;
 
 void sensors_task (void *parameter);
-void bus_task (void *parameter);
+void bus_task_wis (void *parameter);
+void bus_task_mkr (void *parameter);
 
 void read_sensors_data(sensors_data_t *sensors_data);
 void sd_add_record(const sensors_data_t *sensors_data);
@@ -47,8 +48,6 @@ void sleep_mcu(const uint32_t ms);
 
 
 DHT dht(DHT11_PIN, DHT11);
-
-sensors_data_t sensors_data;
 
 void setup() {
     Serial.begin(BAUDRATE);
@@ -66,30 +65,42 @@ void setup() {
                 1,                /* Priority of the task. */
                 NULL);            /* Task handle. */
   
-    xTaskCreate(bus_task,         /* Task function. */
-                "bus_task",       /* String with name of task. */
+    xTaskCreate(bus_task_wis,     /* Task function. */
+                "bus_task_wis",   /* String with name of task. */
                 10000,            /* Stack size in bytes. */
                 NULL,             /* Parameter passed as input of the task */
                 1,                /* Priority of the task. */
                 NULL);            /* Task handle. */ 
     
+    xTaskCreate(bus_task_mkr,     /* Task function. */
+                "bus_task_mkr",   /* String with name of task. */
+                10000,            /* Stack size in bytes. */
+                NULL,             /* Parameter passed as input of the task */
+                1,                /* Priority of the task. */
+                NULL);            /* Task handle. */ 
+
     delay(1000);
 }
 
 void loop() {
-    delay(1000);
+
 }
 
 void sensors_task (void *parameter) {
+    sensors_data_t sensors_data;
+    
     while (1) {
         // read data
         read_sensors_data(&sensors_data);
         // write new sd record 
-        delay(1000);
+        sd_add_record(&sensors_data);
+
+        delay(DATA_SEND_PERIOD);
     }
 }
  
-void bus_task (void *parameter) {
+void bus_task_wis (void *parameter) {
+    sensors_data_t sensors_data;
     bus_state_t bus_state = BUS_STATE_ON_IDLE;
     board_id_t talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
 
@@ -131,6 +142,63 @@ void bus_task (void *parameter) {
                         bus_wis.write(buffer, buffer_length);
 
                         // write sd
+                        // TODO: protect with semaphore
+                        sd_add_record(&sensors_data);
+                    }
+
+                    bus_state = BUS_STATE_ON_IDLE;
+                    talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
+                default:
+                    break;
+            }
+        }
+    }
+}
+
+void bus_task_mkr (void *parameter) {
+    sensors_data_t sensors_data;
+    bus_state_t bus_state = BUS_STATE_ON_IDLE;
+    board_id_t talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
+
+    uint8_t buffer[BUS_PROTOCOL_MAX_DATA_SIZE] = {0};
+    uint8_t buffer_length = 0;
+
+    while (1) {
+        if (bus_protocol_serial_receive(&bus_mkr, buffer, &buffer_length)) {
+            // Serial.print(F("Received message: "));
+            // for (uint8_t i = 0; i < buffer_length; i++) {
+            //     Serial.printf("%02X", buffer[i]);
+            // }
+            // Serial.println();
+
+            switch (bus_protocol_packet_decode(buffer, buffer_length, buffer, &buffer_length)) {
+                case BUS_PROTOCOL_PACKET_TYPE_TRANSMIT_REQUEST :
+                    Serial.println(F("MKR TRANSMIT REQUEST"));
+                    talking_with = bus_protocol_transmit_request_decode(buffer, buffer_length);
+                    
+                    bus_protocol_transmit_grant_encode(talking_with, buffer, &buffer_length);
+                    bus_wis.write(buffer, buffer_length);
+                    
+                    bus_state = BUS_STATE_ON_TRANSIMSSION;
+                    break;
+                case BUS_PROTOCOL_PACKET_TYPE_DATA_SEND :
+                    Serial.println(F("MKR DATA SEND"));
+                    Serial.printf("%d bytes\r\n", buffer_length);
+                    if (bus_protocol_data_send_decode(  &sensors_data.board_id,
+                                                        &sensors_data.utc,
+                                                        &sensors_data.soil_moisture_0,
+                                                        &sensors_data.soil_moisture_1,
+                                                        &sensors_data.dht_temp,
+                                                        &sensors_data.dht_hum,
+                                                        buffer,
+                                                        buffer_length)) 
+                    {
+                        // ACK data send
+                        bus_protocol_packet_encode(BUS_PROTOCOL_PACKET_TYPE_ACK, buffer, 0, buffer, &buffer_length);
+                        bus_mkr.write(buffer, buffer_length);
+
+                        // write sd
+                        // TODO: protect with semaphore
                         sd_add_record(&sensors_data);
                     }
 
