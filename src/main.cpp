@@ -27,7 +27,7 @@
 #define MKR_TX_PIN                          26
 #define MKR_RX_PIN                          27
 
-#define DATA_SEND_PERIOD                    1000
+#define DATA_SEND_PERIOD                    30
 
 HardwareSerial bus_wis(2);
 HardwareSerial bus_mkr(1);
@@ -40,7 +40,7 @@ typedef struct {
     uint16_t soil_moisture_2 = 0;
     float dht_temp = 0;
     float dht_hum = 0;
-} sensor_data_t;
+} sensors_data_t;
 
 typedef enum {
     BUS_STATE_ON_IDLE = 0,
@@ -51,11 +51,11 @@ void sensors_task (void *parameter);
 void bus_task_wis (void *parameter);
 void bus_task_mkr (void *parameter);
 
-void read_sensors_data(sensor_data_t *sensors_data);
-void sd_add_record(const sensor_data_t *sensors_data);
+void read_sensors_data(sensors_data_t *sensors_data);
+void sd_add_record(const sensors_data_t *sensors_data);
 
 uint8_t bus_protocol_sensor_data_payload_decode(
-    sensor_data_t *sensor_data,
+    sensors_data_t *sensor_data,
     const uint8_t *payload,
     const uint8_t payload_length);
 uint8_t bus_protocol_serial_receive(Stream *serial, uint8_t *data, uint8_t *data_length);
@@ -79,34 +79,34 @@ void setup() {
     
     dht.begin();
 
-    WiFi.disconnect(true);  //disconnect from wifi to set new wifi connection
-    WiFi.mode(WIFI_STA);
-    error += esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
-    error += esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
-    //error += esp_wifi_sta_wpa2_ent_set_new_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));  //First time running, i think i needed to set this, although i received an error from the server, claiming the password was not set?
-    error += esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD)); //Following times, it ran fine with just this line (connects very fast).
-    if (error != 0) {
-        Serial.println("Error setting WPA properties.");
-    }
-    WiFi.enableSTA(true);
+    // WiFi.disconnect(true);  //disconnect from wifi to set new wifi connection
+    // WiFi.mode(WIFI_STA);
+    // error += esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+    // error += esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+    // //error += esp_wifi_sta_wpa2_ent_set_new_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));  //First time running, i think i needed to set this, although i received an error from the server, claiming the password was not set?
+    // error += esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD)); //Following times, it ran fine with just this line (connects very fast).
+    // if (error != 0) {
+    //     Serial.println("Error setting WPA properties.");
+    // }
+    // WiFi.enableSTA(true);
 
-    esp_wpa2_config_t config = WPA2_CONFIG_INIT_DEFAULT();
-    if (esp_wifi_sta_wpa2_ent_enable(&config) != ESP_OK) {
-        Serial.println("WPA2 Settings Not OK");
-    }
+    // esp_wpa2_config_t config = WPA2_CONFIG_INIT_DEFAULT();
+    // if (esp_wifi_sta_wpa2_ent_enable(&config) != ESP_OK) {
+    //     Serial.println("WPA2 Settings Not OK");
+    // }
 
-    WiFi.begin(WIFI_SSID); //connect to Eduroam function
-    WiFi.setHostname("ESP32_Sen_Hum"); //set Hostname for your device - not neccesary
-    while (WiFi.status() != WL_CONNECTED) {
-        delay(500);
-        Serial.print(".");
-    }
-    Serial.println("");
-    Serial.println("WiFi connected");
-    Serial.println("IP address set: ");
-    Serial.println(WiFi.localIP()); //print LAN IP
+    // WiFi.begin(WIFI_SSID); //connect to Eduroam function
+    // WiFi.setHostname("ESP32_Sen_Hum"); //set Hostname for your device - not neccesary
+    // while (WiFi.status() != WL_CONNECTED) {
+    //     delay(500);
+    //     Serial.print(".");
+    // }
+    // Serial.println("");
+    // Serial.println("WiFi connected");
+    // Serial.println("IP address set: ");
+    // Serial.println(WiFi.localIP()); //print LAN IP
 
-    timeClient.begin();
+    // timeClient.begin();
 
     xBinarySemaphore = xSemaphoreCreateMutex();
 
@@ -122,7 +122,7 @@ void setup() {
                 10000,            /* Stack size in bytes. */
                 NULL,             /* Parameter passed as input of the task */
                 1,                /* Priority of the task. */
-                NULL);            /* Task handle. */ 
+                NULL);            /* Task handle. */
     
     xTaskCreate(bus_task_mkr,     /* Task function. */
                 "bus_task_mkr",   /* String with name of task. */
@@ -143,25 +143,25 @@ void loop() {
 }
 
 void sensors_task (void *parameter) {
-    sensor_data_t sensors_data;
+    sensors_data_t sensors_data;
     
     while (1) {
         // read data
-        read_sensors_data(&sensors_data);
+        // read_sensors_data(&sensors_data);
 
         // write new sd record
-        if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
-            sd_add_record(&sensors_data);
+        // if (xSemaphoreTake(xBinarySemaphore, portMAX_DELAY) == pdTRUE) {
+        //     sd_add_record(&sensors_data);
 
-           xSemaphoreGive(xBinarySemaphore);
-        }
+        //    xSemaphoreGive(xBinarySemaphore);
+        // }
         
         sleep_mcu(DATA_SEND_PERIOD);
     }
 }
  
 void bus_task_wis (void *parameter) {
-    sensor_data_t sensors_data;
+    sensors_data_t sensors_data;
     board_id_t talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
 
     uint8_t buffer[BUS_PROTOCOL_MAX_DATA_SIZE] = {0};
@@ -188,11 +188,12 @@ void bus_task_wis (void *parameter) {
                     Serial.println(F("WIS DATA SEND"));
                     Serial.printf("%d bytes\r\n", buffer_length);
                     
-                    if (bus_protocol_sensor_data_payload_decode(
-                                                        &sensors_data,
-                                                        buffer, 
-                                                        buffer_length)) 
-                    {
+                    memcpy(&sensors_data, buffer, sizeof(sensors_data));
+                    // if (bus_protocol_sensor_data_payload_decode(
+                    //                                     &sensors_data,
+                    //                                     buffer, 
+                    //                                     buffer_length)) 
+                    // {
                         // ACK data send
                         bus_protocol_packet_encode(BUS_PROTOCOL_PACKET_TYPE_ACK, buffer, 0, buffer, &buffer_length);
                         bus_wis.write(buffer, buffer_length);
@@ -203,19 +204,19 @@ void bus_task_wis (void *parameter) {
 
                             xSemaphoreGive(xBinarySemaphore);
                         }
-                    }
+                    // }
 
                     talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
                 default:
                     break;
             }
         }
-        sleep(DATA_SEND_PERIOD);
+        sleep(3);
     }
 }
 
 void bus_task_mkr (void *parameter) {
-    sensor_data_t sensors_data;
+    sensors_data_t sensors_data;
     board_id_t talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
 
     uint8_t buffer[BUS_PROTOCOL_MAX_DATA_SIZE] = {0};
@@ -223,7 +224,7 @@ void bus_task_mkr (void *parameter) {
 
     while (1) {
         if (bus_protocol_serial_receive(&bus_mkr, buffer, &buffer_length)) {
-            // Serial.print(F("Received message: "));
+            // Serial.print(F("MKR Received message: "));
             // for (uint8_t i = 0; i < buffer_length; i++) {
             //     Serial.printf("%02X", buffer[i]);
             // }
@@ -241,11 +242,14 @@ void bus_task_mkr (void *parameter) {
                 case BUS_PROTOCOL_PACKET_TYPE_DATA_SEND :
                     Serial.println(F("MKR DATA SEND"));
                     Serial.printf("%d bytes\r\n", buffer_length);
-                    if (bus_protocol_sensor_data_payload_decode(
-                                                        &sensors_data,
-                                                        buffer, 
-                                                        buffer_length)) 
-                    {
+
+                    
+                    memcpy(&sensors_data, buffer, sizeof(sensors_data));
+                    // if (bus_protocol_sensor_data_payload_decode(
+                    //                                     &sensors_data,
+                    //                                     buffer, 
+                    //                                     buffer_length)) 
+                    // {
                         // ACK data send
                         bus_protocol_packet_encode(BUS_PROTOCOL_PACKET_TYPE_ACK, buffer, 0, buffer, &buffer_length);
                         bus_mkr.write(buffer, buffer_length);
@@ -256,18 +260,19 @@ void bus_task_mkr (void *parameter) {
 
                             xSemaphoreGive(xBinarySemaphore);
                         }
-                    }
+                    // }
 
                     talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
                 default:
                     break;
             }
         }
-        sleep(DATA_SEND_PERIOD);
+        buffer_length = 0;
+        sleep(3);
     }
 }
 
-void read_sensors_data(sensor_data_t *sensors_data) {
+void read_sensors_data(sensors_data_t *sensors_data) {
     sensors_data->soil_moisture_0 = analogRead(SOIL_MOISTER_ONBOARD_PIN);
     sensors_data->soil_moisture_1 = analogRead(SOIL_MOISTER_EXT_PIN);
 
@@ -290,16 +295,16 @@ void read_sensors_data(sensor_data_t *sensors_data) {
     // Serial.println(sensors_data->dht_hum);
 }
 
-void sd_add_record(const sensor_data_t *sensors_data) {
-    Serial.printf("writen sd: board_id = %d, utc = %u, sm_0 = %u, sm_1 = %u, sm_2 = %u, t = %0.2f, h = %0.2f\r\n",
-                    sensors_data->board_id, sensors_data->utc, sensors_data->soil_moisture_0, 
+void sd_add_record(const sensors_data_t *sensors_data) {
+    Serial.printf("writen sd: board_id = %d, time: %s, sm_0 = %u, sm_1 = %u, sm_2 = %u, t = %0.2f, h = %0.2f\r\n",
+                    sensors_data->board_id, timeClient.getFormattedTime(), sensors_data->soil_moisture_0, 
                     sensors_data->soil_moisture_1, sensors_data->soil_moisture_2,
                     sensors_data->dht_temp, sensors_data->dht_hum);
     File fp = SD.open("/sensor_data.csv", FILE_APPEND);
     
     if (fp) {
-        fp.printf("%d, %u, %u, %u, %u, %0.2f, %0.2f\r\n", 
-                    sensors_data->board_id, sensors_data->utc, sensors_data->soil_moisture_0, 
+        fp.printf("%d, %s, %u, %u, %u, %0.2f, %0.2f\r\n", 
+                    sensors_data->board_id, timeClient.getFormattedTime(), sensors_data->soil_moisture_0, 
                     sensors_data->soil_moisture_1, sensors_data->soil_moisture_2, 
                     sensors_data->dht_temp, sensors_data->dht_hum);
         fp.close();
@@ -309,7 +314,7 @@ void sd_add_record(const sensor_data_t *sensors_data) {
 }
 
 uint8_t bus_protocol_sensor_data_payload_decode(
-    sensor_data_t *sensor_data,
+    sensors_data_t *sensor_data,
     const uint8_t *payload,
     const uint8_t payload_length)
 {
