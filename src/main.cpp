@@ -37,9 +37,10 @@ typedef struct {
     uint32_t utc = 0;
     uint16_t soil_moisture_0 = 0;
     uint16_t soil_moisture_1 = 0;
+    uint16_t soil_moisture_2 = 0;
     float dht_temp = 0;
     float dht_hum = 0;
-} sensors_data_t;
+} sensor_data_t;
 
 typedef enum {
     BUS_STATE_ON_IDLE = 0,
@@ -50,9 +51,13 @@ void sensors_task (void *parameter);
 void bus_task_wis (void *parameter);
 void bus_task_mkr (void *parameter);
 
-void read_sensors_data(sensors_data_t *sensors_data);
-void sd_add_record(const sensors_data_t *sensors_data);
+void read_sensors_data(sensor_data_t *sensors_data);
+void sd_add_record(const sensor_data_t *sensors_data);
 
+uint8_t bus_protocol_sensor_data_payload_decode(
+    sensor_data_t *sensor_data,
+    const uint8_t *payload,
+    const uint8_t payload_length);
 uint8_t bus_protocol_serial_receive(Stream *serial, uint8_t *data, uint8_t *data_length);
 
 void sleep_mcu(const uint32_t ms);
@@ -138,7 +143,7 @@ void loop() {
 }
 
 void sensors_task (void *parameter) {
-    sensors_data_t sensors_data;
+    sensor_data_t sensors_data;
     
     while (1) {
         // read data
@@ -156,8 +161,7 @@ void sensors_task (void *parameter) {
 }
  
 void bus_task_wis (void *parameter) {
-    sensors_data_t sensors_data;
-    bus_state_t bus_state = BUS_STATE_ON_IDLE;
+    sensor_data_t sensors_data;
     board_id_t talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
 
     uint8_t buffer[BUS_PROTOCOL_MAX_DATA_SIZE] = {0};
@@ -179,18 +183,14 @@ void bus_task_wis (void *parameter) {
                     bus_protocol_transmit_grant_encode(talking_with, buffer, &buffer_length);
                     bus_wis.write(buffer, buffer_length);
                     
-                    bus_state = BUS_STATE_ON_TRANSIMSSION;
                     break;
                 case BUS_PROTOCOL_PACKET_TYPE_DATA_SEND :
                     Serial.println(F("WIS DATA SEND"));
                     Serial.printf("%d bytes\r\n", buffer_length);
-                    if (bus_protocol_data_send_decode(  &sensors_data.board_id,
-                                                        &sensors_data.utc,
-                                                        &sensors_data.soil_moisture_0,
-                                                        &sensors_data.soil_moisture_1,
-                                                        &sensors_data.dht_temp,
-                                                        &sensors_data.dht_hum,
-                                                        buffer,
+                    
+                    if (bus_protocol_sensor_data_payload_decode(
+                                                        &sensors_data,
+                                                        buffer, 
                                                         buffer_length)) 
                     {
                         // ACK data send
@@ -205,7 +205,6 @@ void bus_task_wis (void *parameter) {
                         }
                     }
 
-                    bus_state = BUS_STATE_ON_IDLE;
                     talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
                 default:
                     break;
@@ -216,8 +215,7 @@ void bus_task_wis (void *parameter) {
 }
 
 void bus_task_mkr (void *parameter) {
-    sensors_data_t sensors_data;
-    bus_state_t bus_state = BUS_STATE_ON_IDLE;
+    sensor_data_t sensors_data;
     board_id_t talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
 
     uint8_t buffer[BUS_PROTOCOL_MAX_DATA_SIZE] = {0};
@@ -239,18 +237,13 @@ void bus_task_mkr (void *parameter) {
                     bus_protocol_transmit_grant_encode(talking_with, buffer, &buffer_length);
                     bus_wis.write(buffer, buffer_length);
                     
-                    bus_state = BUS_STATE_ON_TRANSIMSSION;
                     break;
                 case BUS_PROTOCOL_PACKET_TYPE_DATA_SEND :
                     Serial.println(F("MKR DATA SEND"));
                     Serial.printf("%d bytes\r\n", buffer_length);
-                    if (bus_protocol_data_send_decode(  &sensors_data.board_id,
-                                                        &sensors_data.utc,
-                                                        &sensors_data.soil_moisture_0,
-                                                        &sensors_data.soil_moisture_1,
-                                                        &sensors_data.dht_temp,
-                                                        &sensors_data.dht_hum,
-                                                        buffer,
+                    if (bus_protocol_sensor_data_payload_decode(
+                                                        &sensors_data,
+                                                        buffer, 
                                                         buffer_length)) 
                     {
                         // ACK data send
@@ -265,7 +258,6 @@ void bus_task_mkr (void *parameter) {
                         }
                     }
 
-                    bus_state = BUS_STATE_ON_IDLE;
                     talking_with = BUS_PROTOCOL_BOARD_ID_UNKNOWN;
                 default:
                     break;
@@ -275,7 +267,7 @@ void bus_task_mkr (void *parameter) {
     }
 }
 
-void read_sensors_data(sensors_data_t *sensors_data) {
+void read_sensors_data(sensor_data_t *sensors_data) {
     sensors_data->soil_moisture_0 = analogRead(SOIL_MOISTER_ONBOARD_PIN);
     sensors_data->soil_moisture_1 = analogRead(SOIL_MOISTER_EXT_PIN);
 
@@ -298,20 +290,55 @@ void read_sensors_data(sensors_data_t *sensors_data) {
     // Serial.println(sensors_data->dht_hum);
 }
 
-void sd_add_record(const sensors_data_t *sensors_data) {
-    Serial.printf("writen sd: board_id = %d, utc = %u, sm_0 = %u, sm_1 = %u, t = %0.2f, h = %0.2f\r\n",
+void sd_add_record(const sensor_data_t *sensors_data) {
+    Serial.printf("writen sd: board_id = %d, utc = %u, sm_0 = %u, sm_1 = %u, sm_2 = %u, t = %0.2f, h = %0.2f\r\n",
                     sensors_data->board_id, sensors_data->utc, sensors_data->soil_moisture_0, 
-                    sensors_data->soil_moisture_1, sensors_data->dht_temp, sensors_data->dht_hum);
+                    sensors_data->soil_moisture_1, sensors_data->soil_moisture_2,
+                    sensors_data->dht_temp, sensors_data->dht_hum);
     File fp = SD.open("/sensor_data.csv", FILE_APPEND);
     
     if (fp) {
-        fp.printf("%d, %u, %u, %u, %0.2f, %0.2f\r\n", 
+        fp.printf("%d, %u, %u, %u, %u, %0.2f, %0.2f\r\n", 
                     sensors_data->board_id, sensors_data->utc, sensors_data->soil_moisture_0, 
-                    sensors_data->soil_moisture_1, sensors_data->dht_temp, sensors_data->dht_hum);
+                    sensors_data->soil_moisture_1, sensors_data->soil_moisture_2, 
+                    sensors_data->dht_temp, sensors_data->dht_hum);
         fp.close();
 
         Serial.println(F("SD written"));
     }
+}
+
+uint8_t bus_protocol_sensor_data_payload_decode(
+    sensor_data_t *sensor_data,
+    const uint8_t *payload,
+    const uint8_t payload_length)
+{
+    uint8_t p_len = 0;
+
+    memcpy(&sensor_data->board_id, &payload[p_len], sizeof(sensor_data->board_id));
+    p_len++;
+
+    memcpy(&sensor_data->utc, &payload[p_len], sizeof(sensor_data->utc));
+    p_len += sizeof(sensor_data->utc);
+
+    memcpy(&sensor_data->soil_moisture_0, &payload[p_len], sizeof(sensor_data->soil_moisture_0));
+    p_len += sizeof(sensor_data->soil_moisture_0);
+
+    memcpy(&sensor_data->soil_moisture_1, &payload[p_len], sizeof(sensor_data->soil_moisture_1));
+    p_len += sizeof(sensor_data->soil_moisture_1);
+
+    if (sensor_data->board_id == BUS_PROTOCOL_BOARD_ID_MKR) {
+        memcpy(&sensor_data->soil_moisture_2, &payload[p_len], sizeof(sensor_data->soil_moisture_2));
+        p_len += sizeof(sensor_data->soil_moisture_2);
+    }
+
+    memcpy(&sensor_data->dht_temp, &payload[p_len], sizeof(sensor_data->dht_temp));
+    p_len += sizeof(sensor_data->dht_temp);
+
+    memcpy(&sensor_data->dht_hum, &payload[p_len], sizeof(sensor_data->dht_hum));
+    p_len += sizeof(sensor_data->dht_hum);
+
+    return p_len == payload_length;
 }
 
 uint8_t bus_protocol_serial_receive(Stream *serial, uint8_t *data, uint8_t *data_length) {
