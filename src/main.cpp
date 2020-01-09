@@ -159,8 +159,8 @@ void bus_task_wis (void *parameter) {
     uint8_t buffer_length = 0;
 
     for(;;) {
-        if (esp_taking_dht_data) {
-            vTaskDelay(300 / portTICK_PERIOD_MS);
+        while (esp_taking_dht_data) {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
         }
         if (bus_protocol_serial_receive(&bus_wis, buffer, &buffer_length, BUS_PROTOCOL_MAX_WAITING_TIME)) {
             switch (bus_protocol_packet_decode(buffer, buffer_length, buffer, &buffer_length)) {
@@ -194,8 +194,8 @@ void bus_task_mkr (void *parameter) {
     uint8_t buffer_length = 0;
 
     for(;;) {
-        if (esp_taking_dht_data) {
-            vTaskDelay(300 / portTICK_PERIOD_MS);
+        while (esp_taking_dht_data) {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
         }
         if (bus_protocol_serial_receive(&bus_mkr, buffer, &buffer_length, BUS_PROTOCOL_MAX_WAITING_TIME)) {
             switch (bus_protocol_packet_decode(buffer, buffer_length, buffer, &buffer_length)) {
@@ -247,6 +247,7 @@ void sd_add_record(const sensors_data_t *sensors_data) {
                     sensors_data->board_id, timeClient.getFormattedDate().c_str(), sensors_data->soil_moisture_0, 
                     sensors_data->soil_moisture_1, sensors_data->soil_moisture_2,
                     sensors_data->dht_temp, sensors_data->dht_hum);
+    portDISABLE_INTERRUPTS();
     File fp = SD.open("/sensor_data.csv", FILE_APPEND);
     
     if (fp) {
@@ -258,6 +259,7 @@ void sd_add_record(const sensors_data_t *sensors_data) {
 
         ESP_LOGD(TAG, "SD written\n");
     }
+    portENABLE_INTERRUPTS();
 }
 
 uint8_t bus_protocol_serial_receive(Stream *serial, uint8_t *data, uint8_t *data_length, const uint32_t timeout) {
