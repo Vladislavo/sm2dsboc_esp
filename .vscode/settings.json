@@ -1,6 +1,8 @@
 {
     "files.associations": {
         "bus_protocol.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "*.tcc": "cpp",
+        "cerrno": "cpp"
     }
 }
